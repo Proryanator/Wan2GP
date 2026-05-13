@@ -1,7 +1,7 @@
 [project]
 name = "wan2gp-fastapi"
 version = "1.0.0"
-description = "FastAPI wrapper for Wan2GP"
+description = "FastAPI wrapper for Wan2GP-api"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
