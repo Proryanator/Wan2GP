@@ -460,7 +460,24 @@ async def flux_image(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        tb = traceback.format_exc()
+        error_detail = {
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": tb,
+            "context": {
+                "prompt": prompt,
+                "model": model,
+                "seed": seed,
+                "num_inference_steps": num_inference_steps,
+                "width": width,
+                "height": height,
+                "batch_size": batch_size,
+                "image_uploaded": image is not None,
+            }
+        }
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @app.get(
