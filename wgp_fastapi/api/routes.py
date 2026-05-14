@@ -462,6 +462,9 @@ async def flux_image(
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
+        # Print to console so it shows in run.bat terminal
+        print(f"[ERROR] flux-image endpoint failed: {e}")
+        print(tb)
         error_detail = {
             "error": str(e),
             "type": type(e).__name__,
