@@ -11,8 +11,6 @@
 1. Double-click the `setup.bat` file to set up the python environment and all that you need to run the server. _Please be patient; there is a lot to install here_
 1. When that is done, double-click `run.bat` to start the server
 
-_Note: the first time you do an image generation or video generation, the API will need to download the models first. Expect a bit of a slow start the first time you set this project up._
-
 ## Uninstallation
 
 1. Delete the `C:\Miniconda3` folder (this was created for you automatically during installation)
