@@ -117,6 +117,14 @@ def main():
     ]
     download_model_list(qwen3_8b_files, "qwen3_8b")
     
+    # Mistral3 small (shared text encoder for flux2 variants)
+    print("\n  Mistral3 Small (shared)...")
+    mistral3_small_files = [
+        ("mistral3_small_bf16.safetensors", f"{HF_BASE}/Flux2/resolve/main/mistral3_small_bf16.safetensors"),
+        ("mistral3_small_quanto_bf16_int8.safetensors", f"{HF_BASE}/Flux2/resolve/main/mistral3_small_quanto_bf16_int8.safetensors"),
+    ]
+    download_model_list(mistral3_small_files, "mistral3small")
+    
     # VAE
     print("\n  VAE...")
     vae_files = [
@@ -133,6 +141,13 @@ def main():
     print(f"  Note: improved_klein.safetensors needs to be downloaded from:")
     print(f"  https://www.dropbox.com/scl/fi/v48q3apj77w4o6g61yugc/improved_klein.safetensors")
     print(f"  Save to: {os.path.abspath(lora_dir)}/improved_klein.safetensors")
+    
+    # pi-FLUX2 ID LoRA (shared, top-level)
+    print("\n  pi-FLUX2 ID LoRA...")
+    piid_lora_files = [
+        ("gmflux2_k8_piid_4step_lora.safetensors", f"{HF_BASE}/Flux2/resolve/main/gmflux2_k8_piid_4step_lora.safetensors"),
+    ]
+    download_model_list(piid_lora_files)
     
     # =========================================================================
     # flux2_klein_4b
@@ -169,7 +184,6 @@ def main():
     # Base flux2_dev model
     print("\n  Base Model (flux2_dev)...")
     flux2_dev_files = [
-        ("flux2-dev.safetensors", f"{HF_BASE}/Flux2/resolve/main/flux2-dev.safetensors"),
         ("flux2-dev_quanto_bf16_int8.safetensors", f"{HF_BASE}/Flux2/resolve/main/flux2-dev_quanto_bf16_int8.safetensors"),
     ]
     download_model_list(flux2_dev_files)
@@ -181,20 +195,11 @@ def main():
     ]
     download_model_list(pi_flux2_heads_files)
     
-    # pi-FLUX2 LoRA (for image editing)
-    print("\n  pi-FLUX2 LoRA...")
-    pi_flux2_lora_files = [
-        ("gmflux2_k8_piid_4step_lora.safetensors", f"{HF_BASE}/Flux2/resolve/main/gmflux2_k8_piid_4step_lora.safetensors"),
-    ]
-    download_model_list(pi_flux2_lora_files, "loras/pi_flux2")
+    # pi-FLUX2 LoRA (already downloaded above)
+    print("\n  pi-FLUX2 LoRA (already downloaded above)...")
     
-    # Text encoder (Mistral3)
-    print("\n  Text Encoder (Mistral3)...")
-    mistral3_files = [
-        ("mistral3_small_bf16.safetensors", f"{HF_BASE}/Flux2/resolve/main/mistral3_small_bf16.safetensors"),
-        ("mistral3_small_quanto_bf16_int8.safetensors", f"{HF_BASE}/Flux2/resolve/main/mistral3_small_quanto_bf16_int8.safetensors"),
-    ]
-    download_model_list(mistral3_files, "mistral3small")
+    # Text encoder (Mistral3 - already downloaded with flux2_klein_9b)
+    print("\n  Text Encoder (Mistral3 - already downloaded above)...")
     
     # VAE (already downloaded above)
     print("\n  VAE (already downloaded above if needed)...")
@@ -221,12 +226,21 @@ def main():
     ]
     download_model_list(qwen25_vl_files, "Qwen2.5-VL-7B-Instruct")
     
-    # VAE
-    print("\n  VAE...")
+    # VAE files at top level (ckpts/)
+    print("\n  VAE files...")
     hunyuan_vae_files = [
-        ("hunyuan_video_vae_bf16.safetensors", f"{HF_BASE}/HunyuanVideo1.5/resolve/main/hunyuan_video_vae_bf16.safetensors"),
+        ("hunyuan_video_1_5_VAE_fp32.safetensors", f"{HF_BASE}/HunyuanVideo1.5/resolve/main/hunyuan_video_1_5_VAE_fp32.safetensors"),
+        ("hunyuan_video_1_5_VAE.json", f"{HF_BASE}/HunyuanVideo1.5/resolve/main/hunyuan_video_1_5_VAE.json"),
     ]
-    download_model_list(hunyuan_vae_files, "hunyuan_video_vae")
+    download_model_list(hunyuan_vae_files)
+    
+    # Qwen VAE (for text encoding)
+    print("\n  Qwen VAE (for text encoding)...")
+    qwen_vae_files = [
+        ("qwen_vae.safetensors", f"{HF_BASE}/Qwen_image/resolve/main/qwen_vae.safetensors"),
+        ("qwen_vae_config.json", f"{HF_BASE}/Qwen_image/resolve/main/qwen_vae_config.json"),
+    ]
+    download_model_list(qwen_vae_files)
     
     # =========================================================================
     # Summary
