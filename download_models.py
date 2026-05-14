@@ -112,16 +112,16 @@ def main():
     # Text encoder (Qwen3 8B)
     print("\n  Text Encoder (Qwen3 8B)...")
     qwen3_8b_files = [
-        ("qwen3_8b_bf16.safetensors", f"{HF_BASE}/Flux2/resolve/main/qwen3_8b_bf16.safetensors"),
-        ("qwen3_8b_quanto_bf16_int8.safetensors", f"{HF_BASE}/Flux2/resolve/main/qwen3_8b_quanto_bf16_int8.safetensors"),
+        ("qwen3_8b_bf16.safetensors", f"{HF_BASE}/Flux2/resolve/main/qwen3_8b/qwen3_8b_bf16.safetensors"),
+        ("qwen3_8b_quanto_bf16_int8.safetensors", f"{HF_BASE}/Flux2/resolve/main/qwen3_8b/qwen3_8b_quanto_bf16_int8.safetensors"),
     ]
     download_model_list(qwen3_8b_files, "qwen3_8b")
     
     # Mistral3 small (shared text encoder for flux2 variants)
     print("\n  Mistral3 Small (shared)...")
     mistral3_small_files = [
-        ("mistral3_small_bf16.safetensors", f"{HF_BASE}/Flux2/resolve/main/mistral3_small_bf16.safetensors"),
-        ("mistral3_small_quanto_bf16_int8.safetensors", f"{HF_BASE}/Flux2/resolve/main/mistral3_small_quanto_bf16_int8.safetensors"),
+        ("mistral3_small_bf16.safetensors", f"{HF_BASE}/Flux2/resolve/main/mistral3small/mistral3_small_bf16.safetensors"),
+        ("mistral3_small_quanto_bf16_int8.safetensors", f"{HF_BASE}/Flux2/resolve/main/mistral3small/mistral3_small_quanto_bf16_int8.safetensors"),
     ]
     download_model_list(mistral3_small_files, "mistral3small")
     
