@@ -204,7 +204,6 @@ def _queue_flux_task(
     """Queue a flux image task (backwards compatibility wrapper)."""
     return _queue_task(
         flux_request.to_wgp_settings(image_start_path=image_start_path),
-        image_start_path=image_start_path,
     )
 
 
@@ -364,7 +363,7 @@ async def image_to_video(
         print(f"Settings: {settings}")
 
         # Queue the task and return immediately
-        task_id = _queue_task(settings, image_start_path=image_path)
+        task_id = _queue_task(settings)
 
         # Return just the task_id immediately for async
         return JSONResponse(content={"task_id": task_id})
