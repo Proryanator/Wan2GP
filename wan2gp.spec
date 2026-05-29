@@ -51,6 +51,10 @@ a = Analysis(
         "starlette.datastructures",
         "starlette.concurrency",
         "starlette.convertors",
+        # FastAPI submodules (wgp_fastapi imports them but is bundled as data, so PyInstaller won't auto-discover)
+        "fastapi.middleware",
+        "fastapi.middleware.cors",
+        "fastapi.responses",
         # HTTP handling
         "multipart",
         "multipart.multipart",
@@ -81,6 +85,11 @@ a = Analysis(
         "test", "unittest",
         "distutils", "setuptools", "pip", "pydoc", "doctest",
         "matplotlib.tests", "numpy.testing", "PIL.SelfTest",
+        # pkg_resources is deprecated and not used by app code; it pulls in jaraco.text/functools
+        # from setuptools._vendor, which we exclude above. Excluding it avoids the runtime hook crash.
+        "pkg_resources",
+        # jedi is not in the conda env; its stale typeshed stubs can confuse the analysis
+        "jedi", "parso",
     ],
     noarchive=False,
 )
