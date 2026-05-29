@@ -77,6 +77,7 @@ a = Analysis(
         "numpy.core._multiarray_umath",
         # pillow-heif support
         "pillow_heif",
+        "torch"
     ],
     hookspath=[],
     runtime_hooks=[],
