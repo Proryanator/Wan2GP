@@ -1,3 +1,4 @@
+import os
 import torch
 import gradio as gr
 
@@ -124,8 +125,17 @@ class family_handler:
         return {"tts": (2200, "TTS")}
 
     @staticmethod
-    def get_lora_dir(base_model_type):
-        return "chatterbox"
+    def register_lora_cli_args(parser, lora_root):
+        parser.add_argument(
+            "--lora-dir-chatterbox",
+            type=str,
+            default=None,
+            help=f"Path to a directory that contains chatterbox settings (default: {os.path.join(lora_root, 'chatterbox')})",
+        )
+
+    @staticmethod
+    def get_lora_dir(base_model_type, args, lora_root):
+        return getattr(args, "lora_dir_chatterbox", None) or os.path.join(lora_root, "chatterbox")
 
     @staticmethod
     def query_model_def(base_model_type, model_def):

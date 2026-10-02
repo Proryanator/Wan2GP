@@ -1,4 +1,3 @@
-from shared.utils.phase_progress import text_encoding_progress
 from pathlib import Path
 
 import torch
@@ -229,13 +228,12 @@ class Mistral3SmallEmbedder(nn.Module):
         attention_mask = inputs["attention_mask"].to(self.model.device)
 
         # Forward pass through the model
-        with text_encoding_progress(self.model.model.language_model.layers, prompt_count=len(txt)):
-            output = self.model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                output_hidden_states=True,
-                use_cache=False,
-            )
+        output = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=True,
+            use_cache=False,
+        )
 
         out = torch.stack([output.hidden_states[k] for k in OUTPUT_LAYERS], dim=1)
         return rearrange(out, "b c l d -> b l (c d)")

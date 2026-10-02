@@ -1,4 +1,3 @@
-from shared.utils.phase_progress import generation_progress, set_phase_status
 import os
 import re
 import time
@@ -125,7 +124,7 @@ class model_factory:
             with torch.device("meta"):
                 self.vae  = AutoencoderKLFlux2(AutoEncoderParamsFlux2())
 
-            offload.load_model_data(self.vae, fl.locate_file("flux2_vae.safetensors"), writable_tensors=False, default_dtype=None)
+            offload.load_model_data(self.vae, fl.locate_file("flux2_vae.safetensors"), writable_tensors= False, )
             self.vae_scale_factor = 8
         else:
             self.t5 = load_t5(torch_device, text_encoder_filename, max_length=512)
@@ -164,7 +163,7 @@ class model_factory:
                     hidden_size=3072, #self.hidden_size,
                     context_layer_norm=True,
                 )
-                offload.load_model_data(feature_embedder, model_filename[1], writable_tensors=False, default_dtype=None)
+                offload.load_model_data(feature_embedder, model_filename[1], writable_tensors=False)
         self.vision_encoder = siglip_model
         self.vision_encoder_processor = siglip_processor
         self.feature_embedder = feature_embedder
@@ -248,7 +247,6 @@ class model_factory:
         return output_text[0]
 
     
-    @generation_progress
     def generate(
             self,
             seed: int | None = None,
@@ -272,23 +270,43 @@ class model_factory:
             denoising_strength = 1.,
             masking_strength = 1.,
             vae_upsampler = None,
-            set_progress_status=None,
             **bbargs
     ):
+            print(f"\n--- Generation Settings ---")
+            print(f"Seed: {seed}")
+            print(f"Input Prompt: {input_prompt}")
+            print(f"N Prompt: {n_prompt}")
+            print(f"Sampling Steps: {sampling_steps}")
+            print(f"Width: {width}, Height: {height}")
+            print(f"Embedded Guidance Scale: {embedded_guidance_scale}")
+            print(f"Guide Scale: {guide_scale}")
+            print(f"Batch Size: {batch_size}")
+            print(f"Video Prompt Type: '{video_prompt_type}'")
+            print(f"Denoising Strength: {denoising_strength}")
+            print(f"Masking Strength: {masking_strength}")
+            print(f"Joint Pass: {joint_pass}")
+            print(f"Image Ref Images Count: {len(input_ref_images) if isinstance(input_ref_images, list) else (1 if input_ref_images is not None else 0)}")
+            print(f"Input Frames: {'Yes' if input_frames is not None else 'No'}")
+            print(f"Input Masks: {'Yes' if input_masks is not None else 'No'}")
+            print(f"BBArgs: {bbargs}")
+            print(f"Loras: {loras_slists}")
+            print(f"---------------------------\n")
+
             if self._interrupt:
                 return None
             device="cuda"
             flux2 = self.is_flux2
             model_mode = bbargs.get("model_mode", None)
+            set_progress_status = bbargs.get("set_progress_status", None)
             def _vae_upsampler_progress(_phase, current_step=None, total_steps=None):
                 if callable(set_progress_status):
                     progress_label = getattr(vae_upsampler, "progress_label", "VAE Spatial Upsampling")
                     if current_step is None or total_steps is None:
-                        set_progress_status(f"{progress_label} in Progress")
+                        set_progress_status(f"{progress_label} in progress")
                     else:
                         total_steps = int(total_steps)
                         step_no = min(int(current_step) + 1, total_steps)
-                        set_progress_status(f"{progress_label} in Progress ({step_no}/{total_steps})")
+                        set_progress_status(f"{progress_label} in progress ({step_no}/{total_steps})")
             model_mode_int = None
             if model_mode is not None:
                 try:
@@ -333,11 +351,9 @@ class model_factory:
                 randn = torch.randn(shape, generator=generator, dtype=torch.bfloat16, device="cuda")
                 img, img_ids = batched_prc_img(randn)                
                 encode_fn = lambda prompts: list(zip(*batched_prc_txt(self.mistral(prompts).to(torch.bfloat16))))
-                prompts_to_encode = [input_prompt, n_prompt] if NAG is not None or guide_scale != 1 else [input_prompt]
-                contexts = self.text_encoder_cache.encode(encode_fn, prompts_to_encode, device=self.device)
-                txt_embeds, txt_ids = contexts[0]
+                txt_embeds, txt_ids = self.text_encoder_cache.encode(encode_fn, [input_prompt], device=self.device)[0]
                 if NAG is not None:
-                    neg_embeds, neg_ids = contexts[1]
+                    neg_embeds, neg_ids = self.text_encoder_cache.encode(encode_fn, [n_prompt], device=self.device)[0]
                     if txt_embeds.dim() == 2:
                         txt_embeds = txt_embeds.unsqueeze(0)
                         txt_ids = txt_ids.unsqueeze(0)
@@ -357,7 +373,7 @@ class model_factory:
                 vec = torch.zeros(batch_size, 1, device=device, dtype=self.dtype)
                 inp = { "img": img, "img_ids": img_ids, "txt": txt_embeds.to(device), "txt_ids": txt_ids.to(device), "vec": vec }
                 if guide_scale != 1:
-                    txt_embeds, txt_ids = contexts[1]
+                    txt_embeds, txt_ids = self.text_encoder_cache.encode(encode_fn, [n_prompt], device=self.device)[0]
                     txt_embeds, txt_ids = txt_embeds.expand(batch_size, -1, -1), txt_ids.expand(batch_size, -1, -1)
                     inp.update({ "neg_txt": txt_embeds.to(device), "neg_txt_ids": txt_ids.to(device), "neg_vec": vec })
 
@@ -459,9 +475,7 @@ class model_factory:
                 encode_fn = lambda prompts: [prepare_prompt(self.t5, self.clip, 1, prompt, device=device) for prompt in prompts]
                 prompt_list = [input_prompt] if isinstance(input_prompt, str) else input_prompt
                 prompt_bs = len(prompt_list) if batch_size == 1 and not isinstance(input_prompt, str) else batch_size
-                negative_list = ([n_prompt] if isinstance(n_prompt, str) else n_prompt) if NAG is not None or guide_scale != 1 else []
-                contexts = self.text_encoder_cache.encode(encode_fn, prompt_list + negative_list, device=device)
-                prompt_contexts, negative_contexts = contexts[:len(prompt_list)], contexts[len(prompt_list):]
+                prompt_contexts = self.text_encoder_cache.encode(encode_fn, prompt_list, device=device)
                 txt = torch.cat([ctx["txt"] for ctx in prompt_contexts], dim=0)
                 vec = torch.cat([ctx["vec"] for ctx in prompt_contexts], dim=0)
                 if txt.shape[0] == 1 and prompt_bs > 1:
@@ -471,7 +485,7 @@ class model_factory:
                     pos_len = txt.shape[1]
                     neg_list = [n_prompt] if isinstance(n_prompt, str) else n_prompt
                     neg_bs = len(neg_list) if batch_size == 1 and not isinstance(n_prompt, str) else batch_size
-                    neg_contexts = negative_contexts
+                    neg_contexts = self.text_encoder_cache.encode(encode_fn, neg_list, device=device)
                     neg_txt = torch.cat([ctx["txt"] for ctx in neg_contexts], dim=0)
                     if neg_txt.shape[0] == 1 and neg_bs > 1:
                         neg_txt = neg_txt.repeat(neg_bs, 1, 1)
@@ -485,7 +499,7 @@ class model_factory:
                 if guide_scale != 1:
                     neg_list = [n_prompt] if isinstance(n_prompt, str) else n_prompt
                     neg_bs = len(neg_list) if batch_size == 1 and not isinstance(n_prompt, str) else batch_size
-                    neg_contexts = negative_contexts
+                    neg_contexts = self.text_encoder_cache.encode(encode_fn, neg_list, device=device)
                     neg_txt = torch.cat([ctx["txt"] for ctx in neg_contexts], dim=0)
                     neg_vec = torch.cat([ctx["vec"] for ctx in neg_contexts], dim=0)
                     if neg_txt.shape[0] == 1 and neg_bs > 1:
@@ -499,7 +513,6 @@ class model_factory:
                 ref_style_imgs = [self.vision_encoder_processor(img, return_tensors="pt").to(self.device) for img in ref_style_imgs]
                 if self.feature_embedder is not None and ref_style_imgs is not None and len(ref_style_imgs) > 0 and self.vision_encoder is not None:
                     # processing style feat into textural hidden space
-                    set_phase_status("Encoding Image Features")
                     siglip_embedding = [self.vision_encoder(**emb, output_hidden_states=True) for emb in ref_style_imgs]
                     siglip_embedding = torch.cat([self.feature_embedder(emb) for emb in siglip_embedding], dim=1)
                     siglip_embedding_ids = torch.zeros( siglip_embedding.shape[0], siglip_embedding.shape[1], 3 ).to(device)
@@ -515,7 +528,6 @@ class model_factory:
                     def unpack_latent(x):
                         return unpack(x.float(), height, width) 
 
-            del contexts
             # denoise initial noise
             x = denoise(
                 self.model,

@@ -1,3 +1,4 @@
+import os
 import torch
 from shared.utils.hf import build_hf_url
 
@@ -64,8 +65,17 @@ class family_handler():
         return {"ltxv":(30, "LTX Video")}
 
     @staticmethod
-    def get_lora_dir(base_model_type):
-        return "ltxv"
+    def register_lora_cli_args(parser, lora_root):
+        parser.add_argument(
+            "--lora-dir-ltxv",
+            type=str,
+            default=None,
+            help=f"Path to a directory that contains LTX Videos Loras (default: {os.path.join(lora_root, 'ltxv')})"
+        )
+
+    @staticmethod
+    def get_lora_dir(base_model_type, args, lora_root):
+        return getattr(args, "lora_dir_ltxv", None) or os.path.join(lora_root, "ltxv")
 
     @staticmethod
     def query_model_files(computeList, base_model_type, model_def=None):

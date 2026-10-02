@@ -1,5 +1,5 @@
-from shared.utils.phase_progress import vae_decoding_progress, set_phase_status
 import math
+import sys
 from dataclasses import dataclass, field
 
 import torch
@@ -303,6 +303,16 @@ class AutoencoderKLFlux2(nn.Module):
         )
 
     def normalize(self, z):
+        if sys.platform == 'darwin':
+            # Manual eval-mode BatchNorm2d to avoid MPS dtype mismatch.
+            # Calling self.bn(z) on MPS with mixed dtypes (bf16 input + f32 running stats,
+            # or vice versa) triggers mps.normalization type errors. This manual path
+            # operates entirely in float32 and avoids the MPS backend normalization op.
+            orig_dtype = z.dtype
+            z = z.float()
+            mean = self.bn.running_mean.float().view(1, -1, 1, 1)
+            var = self.bn.running_var.float().view(1, -1, 1, 1)
+            return ((z - mean) / torch.sqrt(var + self.bn_eps)).to(orig_dtype)
         self.bn.eval()
         return self.bn(z)
 
@@ -313,7 +323,6 @@ class AutoencoderKLFlux2(nn.Module):
         return z * s.to(z) + m.to(z)
 
     def encode(self, x: Tensor) -> Tensor:
-        set_phase_status("VAE Encoding")
         moments = self.encoder(x)
         mean = torch.chunk(moments, 2, dim=1)[0]
 
@@ -338,6 +347,5 @@ class AutoencoderKLFlux2(nn.Module):
             
     def decode(self, z: Tensor) -> Tensor:
 
-        with vae_decoding_progress(1, self.decoder):
-            dec = self.decoder(z)
-            return dec
+        dec = self.decoder(z)
+        return dec

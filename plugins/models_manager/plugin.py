@@ -1883,7 +1883,7 @@ class modelsManagerPlugin(WAN2GPPlugin):
     def _get_quant_aliases(self):
         if not hasattr(self, "_quant_alias_cache"):
             aliases = set(quant_router.get_available_qtype_aliases() or [])
-            aliases.update({"int8", "int8n", "fp8"})
+            aliases.update({"int8", "int8n", "fp8", "gguf"})
             self._quant_alias_cache = sorted(
                 {alias for alias in aliases if alias}, key=len, reverse=True
             )
@@ -1897,6 +1897,8 @@ class modelsManagerPlugin(WAN2GPPlugin):
                 candidates.add("int8")
             if "fp8" in token or "float8" in token:
                 candidates.add("fp8")
+            if "gguf" in token:
+                candidates.add("gguf")
         return sorted(candidates)
 
     def _collect_text_encoder_files(self, model_type, model_def):
@@ -2558,15 +2560,6 @@ class modelsManagerPlugin(WAN2GPPlugin):
         click_view=False,
     ):
         label_display = html.escape(label)
-        for status, prefix in model_dropdowns.MODEL_STATUS_PREFIXES.items():
-            if label.startswith(prefix + " "):
-                status_name, status_title = {
-                    model_dropdowns.MODEL_FILE_STATUS_MISSING: ("missing", "Not installed"),
-                    model_dropdowns.MODEL_FILE_STATUS_PARTIAL: ("partial", "Partially available"),
-                    model_dropdowns.MODEL_FILE_STATUS_EXPECTED: ("available", "Available"),
-                }[status]
-                label_display = f"<span class='wangp-model-status' data-wangp-availability='{status_name}' role='img' aria-label='{status_title}' title='{status_title}'></span>{html.escape(label[len(prefix) + 1:])}"
-                break
         label_attr = html.escape(label, quote=True)
         node_id_attr = html.escape(node_id, quote=True)
         type_attr = html.escape(node_type, quote=True)

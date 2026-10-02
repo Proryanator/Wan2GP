@@ -1,5 +1,4 @@
 
-from shared.utils.phase_progress import generation_progress
 from mmgp import offload
 
 import torch, json, os
@@ -9,7 +8,6 @@ from .transformer_qwenimage import QwenImageTransformer2DModel
 
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer, Qwen2VLProcessor
 from .autoencoder_kl_qwenimage import AutoencoderKLQwenImage
-from .vae_variants import load_vae
 from diffusers import FlowMatchEulerDiscreteScheduler
 from .pipeline_qwenimage import QwenImagePipeline
 from PIL import Image
@@ -83,9 +81,9 @@ class model_factory():
         source =  model_def.get("source", None)
 
         if source is not None:
-            offload.load_model_data(transformer, source, fused_split_map=_QWEN_FUSED_SPLIT_MAP, writable_tensors=False, default_dtype=torch.bfloat16)
+            offload.load_model_data(transformer, source, fused_split_map=_QWEN_FUSED_SPLIT_MAP, writable_tensors=False)
         else:
-            offload.load_model_data(transformer, transformer_filename, fused_split_map=_QWEN_FUSED_SPLIT_MAP, writable_tensors=False, default_dtype=torch.bfloat16)
+            offload.load_model_data(transformer, transformer_filename, fused_split_map=_QWEN_FUSED_SPLIT_MAP, writable_tensors=False)
         # transformer = offload.fast_load_transformers_model("transformer_quanto.safetensors", writable_tensors= True , modelClass=QwenImageTransformer2DModel, defaultConfigPath="transformer_config.json")
 
         if not source is None:
@@ -96,7 +94,7 @@ class model_factory():
             from wgp import save_quantized_model
             save_quantized_model(transformer, model_type, model_filename[0], dtype, base_config_file)
 
-        text_encoder = offload.fast_load_transformers_model(text_encoder_filename, writable_tensors=False, modelClass=Qwen2_5_VLForConditionalGeneration, defaultConfigPath=os.path.join(tokenizer_path, "config.json"))
+        text_encoder = offload.fast_load_transformers_model(text_encoder_filename,  writable_tensors= True , modelClass=Qwen2_5_VLForConditionalGeneration,  defaultConfigPath= os.path.join(tokenizer_path, "config.json") )
         # text_encoder = offload.fast_load_transformers_model(text_encoder_filename, do_quantize=True,  writable_tensors= True , modelClass=Qwen2_5_VLForConditionalGeneration, defaultConfigPath="text_encoder_config.json", verboseLevel=2)
         # text_encoder.to(torch.float16)
         # offload.save_model(text_encoder, "text_encoder_quanto_fp16.safetensors", do_quantize= True)
@@ -113,9 +111,17 @@ class model_factory():
                 vae_override = vae_override.get("URLs", None)
             if vae_override:
                 vae_checkpoint = vae_override
-            vae = offload.fast_load_transformers_model(fl.locate_file(vae_checkpoint), writable_tensors=False, modelClass=AutoencoderKLQwenImage, defaultConfigPath=fl.locate_file(vae_config_file), configKwargs={"upsampler_factor": VAE_upsampler_factor}, preprocess_sd=preprocess_vae_sd)
         else:
-            vae = load_vae(model_def, VAE_upsampling)
+            VAE_upsampler_factor = 2 if VAE_upsampling is not None else 1
+            if VAE_upsampler_factor == 2:
+                from .convert_diffusers_qwen_vae import convert_state_dict
+                preprocess_vae_sd = convert_state_dict
+                vae_checkpoint = "Wan2.1_VAE_upscale2x_imageonly_real_v1.safetensors"
+            else:
+                preprocess_vae_sd = None
+                vae_checkpoint = "qwen_vae.safetensors"
+            vae_config_file = "qwen_vae_config.json"
+        vae = offload.fast_load_transformers_model(fl.locate_file(vae_checkpoint), writable_tensors=False, modelClass=AutoencoderKLQwenImage, defaultConfigPath=fl.locate_file(vae_config_file), configKwargs={"upsampler_factor": VAE_upsampler_factor}, preprocess_sd=preprocess_vae_sd)
         vae.upsampling_set = VAE_upsampling
         self.pipeline = QwenImagePipeline(vae, text_encoder, tokenizer, transformer, processor)
         self.vae=vae
@@ -124,7 +130,6 @@ class model_factory():
         self.transformer=transformer
         self.processor = processor
 
-    @generation_progress
     def generate(
         self,
         seed: int | None = None,
@@ -153,6 +158,30 @@ class model_factory():
         set_progress_status=None,
         **bbargs
     ):
+        print(f"\n--- Generation Settings ---")
+        print(f"Seed: {seed}")
+        print(f"Input Prompt: {input_prompt}")
+        print(f"N Prompt: {n_prompt}")
+        print(f"Sampling Steps: {sampling_steps}")
+        print(f"Width: {width}, Height: {height}")
+        print(f"Guide Scale: {guide_scale}")
+        print(f"Batch Size: {batch_size}")
+        print(f"Video Prompt Type: '{video_prompt_type}'")
+        print(f"Denoising Strength: {denoising_strength}")
+        print(f"Masking Strength: {masking_strength}")
+        print(f"Model Mode: {model_mode}")
+        print(f"Sample Solver: {sample_solver}")
+        print(f"Joint Pass: {joint_pass}")
+        print(f"Fit Into Canvas: {fit_into_canvas}")
+        print(f"Image Ref Images Count: {len(input_ref_images) if isinstance(input_ref_images, list) else (1 if input_ref_images is not None else 0)}")
+        print(f"Input Frames: {'Yes' if input_frames is not None else 'No'}")
+        print(f"Input Masks: {'Yes' if input_masks is not None else 'No'}")
+        print(f"VAE Tile Size: {VAE_tile_size}")
+        print(f"Outpainting Dims: {outpainting_dims}")
+        print(f"BBArgs: {bbargs}")
+        print(f"Loras: {loras_slists}")
+        print(f"---------------------------\n")
+
         # Generate with different aspect ratios
         aspect_ratios = {
         "1:1": (1328, 1328),
@@ -245,7 +274,7 @@ class model_factory():
         def _vae_upsampler_progress(_phase, current_step=None, total_steps=None):
             if callable(set_progress_status):
                 label = getattr(vae_upsampler, "progress_label", "VAE Spatial Upsampling")
-                set_progress_status(f"{label} in Progress" if current_step is None or total_steps is None else f"{label} in Progress ({int(current_step) + 1}/{int(total_steps)})")
+                set_progress_status(f"{label} in progress" if current_step is None or total_steps is None else f"{label} in progress ({int(current_step) + 1}/{int(total_steps)})")
 
         image = self.pipeline(
             prompt=input_prompt,

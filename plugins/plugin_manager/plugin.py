@@ -1,9 +1,7 @@
 import gradio as gr
-from shared.gradio.progress import WangpProgress
 import json
 import os
 import traceback
-from shared.utils.config_store import config_lock, write_config, update_config
 from shared.utils.plugins import INSTALLED_REMOTE_PLUGINS_KEY, WAN2GPPlugin, compare_release_metadata, is_wangp_compatible, normalize_plugin_types, plugin_id_from_url
 
 DISCOVER_PLUGIN_TYPE_TABS = (
@@ -558,7 +556,6 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
                             self.plugin_url_textbox = gr.Textbox(label="GitHub URL", placeholder="https://github.com/user/wan2gp-plugin-repo")
                             self.install_plugin_button = gr.Button("Download and Install from URL")
 
-            self.operation_progress = WangpProgress.component()
             with gr.Column(visible=False):
                 self.plugin_action_input = gr.Textbox(elem_id="plugin_action_input")
                 self.save_action_input = gr.Textbox(elem_id="save_action_input")
@@ -566,13 +563,19 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
         js = self._get_js_script_html()
         plugin_blocks.load(fn=None, js=js)
 
-        self.on_tab_outputs = [self.plugins_html_display, *self.local_available_plugins_html_outputs, *self.community_plugins_html_outputs]
+        self.main_tabs.select(
+            self._on_tab_select_refresh,
+            None,
+            [self.plugins_html_display, *self.local_available_plugins_html_outputs, *self.community_plugins_html_outputs],
+            show_progress="hidden"
+        )
         
         self.restart_button.click(fn=None, js="handleRestart()")
-        WangpProgress.bind(self.refresh_catalog_button.click, self._refresh_catalog,
+        self.refresh_catalog_button.click(
+            fn=self._refresh_catalog,
             inputs=[],
             outputs=[self.plugins_html_display, *self.local_available_plugins_html_outputs, *self.community_plugins_html_outputs],
-            component=self.operation_progress,
+            show_progress="full"
         )
 
         self.save_action_input.change(
@@ -581,21 +584,25 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
             outputs=[self.plugins_html_display, *self.local_available_plugins_html_outputs, *self.community_plugins_html_outputs]
         )
         
-        WangpProgress.bind(self.plugin_action_input.change, self._handle_plugin_action_from_json,
+        self.plugin_action_input.change(
+            fn=self._handle_plugin_action_from_json,
             inputs=[self.plugin_action_input],
             outputs=[self.plugins_html_display, *self.local_available_plugins_html_outputs, *self.community_plugins_html_outputs],
-            component=self.operation_progress,
+            show_progress="full"
         )
 
-        WangpProgress.bind(self.install_plugin_button.click, self._install_plugin_and_refresh,
+        self.install_plugin_button.click(
+            fn=self._install_plugin_and_refresh,
             inputs=[self.plugin_url_textbox],
             outputs=[self.plugins_html_display, *self.local_available_plugins_html_outputs, *self.community_plugins_html_outputs, self.plugin_url_textbox],
-            component=self.operation_progress,
+            show_progress="full"
         )
 
         return plugin_blocks
 
-    def on_tab_select(self, state: dict):
+    def _on_tab_select_refresh(self, evt: gr.SelectData):
+        if evt.value != "Plugins":
+            return (gr.update(), *[gr.update() for _ in range(self._available_outputs_count())])
         if hasattr(self, '_community_plugins_cache'):
             del self._community_plugins_cache
 
@@ -603,7 +610,7 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
         available_outputs = [gr.update(value=html) for html in self._build_available_plugins_html_outputs()]
         return gr.update(value=installed_html), *available_outputs
 
-    def _refresh_catalog(self, progress=WangpProgress()):
+    def _refresh_catalog(self, progress=gr.Progress()):
         self.app.plugin_manager.refresh_catalog(installed_only=True, use_remote=False)
         if hasattr(self, '_community_plugins_cache'):
             del self._community_plugins_cache
@@ -637,17 +644,17 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
             return 0
 
     def _write_server_config(self):
-        write_config(self.server_config, self.server_config_filename)
+        with open(self.server_config_filename, "w", encoding="utf-8") as writer:
+            writer.write(json.dumps(self.server_config, indent=4))
 
     def _enable_plugin_id(self, plugin_id: str):
-        with config_lock:
-            enabled_plugins = self.server_config.get("enabled_plugins", [])
-            if plugin_id not in enabled_plugins:
-                enabled_plugins.append(plugin_id)
-                self.server_config["enabled_plugins"] = enabled_plugins
-                self._write_server_config()
-                return True
-            return False
+        enabled_plugins = self.server_config.get("enabled_plugins", [])
+        if plugin_id not in enabled_plugins:
+            enabled_plugins.append(plugin_id)
+            self.server_config["enabled_plugins"] = enabled_plugins
+            self._write_server_config()
+            return True
+        return False
 
     def _enable_plugin_after_install(self, url: str):
         plugin_id = plugin_id_from_url(url)
@@ -672,14 +679,16 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
         return result_message
 
     def _save_plugin_settings(self, enabled_plugins: list, silent: bool = False):
-        update_config(self.server_config, self.server_config_filename, {"enabled_plugins": enabled_plugins})
+        self.server_config["enabled_plugins"] = enabled_plugins
+        self._write_server_config()
         self.restart_required = True
         if not silent:
             gr.Info("Plugin settings saved. Please restart WanGP for changes to take effect.")
         return self._build_plugins_html(), *self._build_available_plugins_html_outputs()
 
     def _save_and_restart(self, enabled_plugins: list):
-        update_config(self.server_config, self.server_config_filename, {"enabled_plugins": enabled_plugins})
+        self.server_config["enabled_plugins"] = enabled_plugins
+        self._write_server_config()
         gr.Info("Settings saved. Restarting application...")
         if callable(getattr(self, "restart_application", None)):
             self.restart_application()
@@ -706,7 +715,7 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
             gr.Warning("Could not process save action due to invalid data.")
             return gr.update(value=self._build_plugins_html()), *[gr.update() for _ in range(self._available_outputs_count())]
 
-    def _install_plugin_and_refresh(self, url, progress=WangpProgress()):
+    def _install_plugin_and_refresh(self, url, progress=gr.Progress()):
         progress(0, desc="Starting installation...")
         result_message = self.app.plugin_manager.install_plugin_from_url(url, progress=progress)
         result_message = self._finish_install_from_url(url, result_message)
@@ -721,7 +730,7 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
             del self._community_plugins_cache
         return self._build_plugins_html(), *self._build_available_plugins_html_outputs(), ""
 
-    def _handle_plugin_action_from_json(self, payload_str: str, progress=WangpProgress()):
+    def _handle_plugin_action_from_json(self, payload_str: str, progress=gr.Progress()):
         if not payload_str:
             return (gr.update(), *[gr.update() for _ in range(self._available_outputs_count())])
         try:
@@ -741,12 +750,11 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
                 result_message = ""
                 if action == 'uninstall':
                     result_message = self.app.plugin_manager.uninstall_plugin(plugin_id)
-                    with config_lock:
-                        current_enabled = self.server_config.get("enabled_plugins", [])
-                        if plugin_id in current_enabled:
-                            current_enabled.remove(plugin_id)
-                            self.server_config["enabled_plugins"] = current_enabled
-                            self._write_server_config()
+                    current_enabled = self.server_config.get("enabled_plugins", [])
+                    if plugin_id in current_enabled:
+                        current_enabled.remove(plugin_id)
+                        self.server_config["enabled_plugins"] = current_enabled
+                        self._write_server_config()
                 elif action == 'update':
                     result_message = self.app.plugin_manager.update_plugin(plugin_id, progress=progress)
                 elif action == 'reinstall':
@@ -760,12 +768,11 @@ class PluginManagerUIPlugin(WAN2GPPlugin):
                         self._enable_plugin_id(plugin_id)
                         result_message = result_message.replace("Please enable it in the list and restart WanGP.", "It has been enabled. Please restart WanGP.")
                 elif action == 'disable_local':
-                    with config_lock:
-                        enabled_plugins = self.server_config.get("enabled_plugins", [])
-                        if plugin_id in enabled_plugins:
-                            enabled_plugins.remove(plugin_id)
-                            self.server_config["enabled_plugins"] = enabled_plugins
-                            self._write_server_config()
+                    enabled_plugins = self.server_config.get("enabled_plugins", [])
+                    if plugin_id in enabled_plugins:
+                        enabled_plugins.remove(plugin_id)
+                        self.server_config["enabled_plugins"] = enabled_plugins
+                        self._write_server_config()
                     result_message = f"[Success] Plugin '{plugin_id}' disabled. Please restart WanGP for changes to take effect."
             
             if "[Success]" in result_message:

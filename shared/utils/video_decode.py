@@ -197,8 +197,7 @@ def _probe_mkv_sparse_frame_count(source_path, ffprobe_path, duration, start_tim
 
 
 @lru_cache(maxsize=128)
-def probe_video_stream_metadata(video_path, *, file_version=None):
-    # Callers needing fresh file facts include (mtime_ns, size) in the cache key.
+def probe_video_stream_metadata(video_path):
     video_path = os.fspath(video_path)
     if (entry := get_virtual_media_entry(video_path)) is not None:
         return _build_vsource_metadata(video_path, entry)

@@ -1,4 +1,3 @@
-from shared.utils.media_control import inference_checkpoint
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
@@ -116,7 +115,6 @@ class Transformer(nn.Module):
         mask = mask[..., input_pos]
         freqs_cis = self.freqs_cis[input_pos]
         for i, layer in enumerate(self.layers):
-            inference_checkpoint()
             x = layer(x, c, freqs_cis, mask)
         x = self.norm(x, c)
         return x

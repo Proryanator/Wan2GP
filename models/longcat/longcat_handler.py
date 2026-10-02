@@ -1,3 +1,4 @@
+import os
 import torch
 from shared.utils.hf import build_hf_url
 
@@ -23,12 +24,33 @@ class family_handler:
         return {"longcat": (60, "LongCat")}
 
     @staticmethod
-    def get_lora_dir(base_model_type):
+    def register_lora_cli_args(parser, lora_root):
+        parser.add_argument(
+            "--lora-dir-longcat",
+            type=str,
+            default=None,
+            help=f"Path to a directory that contains LongCat Video LoRAs (default: {os.path.join(lora_root, 'longcat')})",
+        )
+        parser.add_argument(
+            "--lora-dir-longcat-avatar",
+            type=str,
+            default=None,
+            help=f"Path to a directory that contains LongCat Avatar LoRAs (default: {os.path.join(lora_root, 'longcat_avatar')})",
+        )
+        parser.add_argument(
+            "--lora-dir-longcat-avatar-v1-5",
+            type=str,
+            default=None,
+            help=f"Path to a directory that contains LongCat Avatar 1.5 LoRAs (default: {os.path.join(lora_root, 'longcat_avatar_v1_5')})",
+        )
+
+    @staticmethod
+    def get_lora_dir(base_model_type, args, lora_root):
         if base_model_type == "longcat_avatar":
-            return "longcat_avatar"
+            return getattr(args, "lora_dir_longcat_avatar", None) or os.path.join(lora_root, "longcat_avatar")
         if base_model_type == "longcat_avatar_v1_5":
-            return "longcat_avatar_v1_5"
-        return "longcat"
+            return getattr(args, "lora_dir_longcat_avatar_v1_5", None) or os.path.join(lora_root, "longcat_avatar_v1_5")
+        return getattr(args, "lora_dir_longcat", None) or os.path.join(lora_root, "longcat")
 
     @staticmethod
     def query_model_def(base_model_type, model_def):
@@ -138,8 +160,13 @@ class family_handler:
                 }
             )
         else:
-            from models.wan.multitalk.assets import query_download_def
-            download_def.append(query_download_def(include_readme=True))
+            download_def.append(
+                {
+                    "repoId": "DeepBeepMeep/Wan2.1",
+                    "sourceFolderList": ["chinese-wav2vec2-base"],
+                    "fileList": [["config.json", "preprocessor_config.json", "pytorch_model.bin", "readme.txt"]],
+                }
+            )
         download_def += [
             {
                 "repoId": "DeepBeepMeep/Wan2.1",

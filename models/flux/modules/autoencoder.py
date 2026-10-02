@@ -1,4 +1,3 @@
-from shared.utils.phase_progress import vae_decoding_progress, set_phase_status
 from dataclasses import dataclass
 
 import torch
@@ -309,15 +308,13 @@ class AutoEncoder(nn.Module):
     def get_VAE_tile_size(*args, **kwargs):
         return []
     def encode(self, x: Tensor) -> Tensor:
-        set_phase_status("VAE Encoding")
         z = self.reg(self.encoder(x))
         z = self.scale_factor * (z - self.shift_factor)
         return z
 
     def decode(self, z: Tensor) -> Tensor:
-        with vae_decoding_progress(1, self.decoder):
-            z = z / self.scale_factor + self.shift_factor
-            return self.decoder(z)
+        z = z / self.scale_factor + self.shift_factor
+        return self.decoder(z)
 
     def forward(self, x: Tensor) -> Tensor:
         return self.decode(self.encode(x))

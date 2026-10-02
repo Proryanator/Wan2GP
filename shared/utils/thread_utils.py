@@ -51,25 +51,6 @@ class _TaskRunner:
 
         if thread is not None:
             thread.start()
-        return func
-
-    def promote_task(self, task) -> bool:
-        return self.promote_tasks([task])
-
-    def promote_tasks(self, tasks) -> bool:
-        targets = list(tasks)
-        if not targets:
-            return False
-        with self.lock:
-            remaining = list(self.task_queue)
-            promoted = []
-            for task in targets:
-                index = next((index for index, queued_task in enumerate(remaining) if queued_task[0] is task), None)
-                if index is None:
-                    return False
-                promoted.append(remaining.pop(index))
-            self.task_queue[:] = promoted + remaining
-            return True
 
 
 class Listener:
@@ -88,15 +69,7 @@ class Listener:
 
     @classmethod
     def add_task(cls, func, *args, runner_name="default", thread_name=None, **kwargs):
-        return cls._get_runner(runner_name).add_task(func, *args, thread_name=thread_name, **kwargs)
-
-    @classmethod
-    def promote_task(cls, task, runner_name="default"):
-        return cls._get_runner(runner_name).promote_task(task)
-
-    @classmethod
-    def promote_tasks(cls, tasks, runner_name="default"):
-        return cls._get_runner(runner_name).promote_tasks(tasks)
+        cls._get_runner(runner_name).add_task(func, *args, thread_name=thread_name, **kwargs)
 
 
 def async_run(func, *args, thread_name=None, **kwargs):
@@ -104,15 +77,7 @@ def async_run(func, *args, thread_name=None, **kwargs):
 
 
 def async_run_in(runner_name, func, *args, thread_name=None, **kwargs):
-    return Listener.add_task(func, *args, runner_name=runner_name, thread_name=thread_name, **kwargs)
-
-
-def promote_async_task(runner_name, task):
-    return Listener.promote_task(task, runner_name=runner_name)
-
-
-def promote_async_tasks(runner_name, tasks):
-    return Listener.promote_tasks(tasks, runner_name=runner_name)
+    Listener.add_task(func, *args, runner_name=runner_name, thread_name=thread_name, **kwargs)
 
 
 class FIFOQueue:

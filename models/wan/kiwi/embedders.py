@@ -1,4 +1,3 @@
-from shared.utils.phase_progress import control_video_encoding
 import gc
 from typing import Optional, Sequence
 
@@ -47,7 +46,7 @@ def _load_embedder(
     dtype: torch.dtype,
 ):
     model = embedder_cls()
-    offload.load_model_data(model, embedder_file, writable_tensors=False, default_dtype=None)
+    offload.load_model_data(model, embedder_file, writable_tensors=False)
     model.eval().requires_grad_(False)
     model.to(device=device, dtype=dtype)
     return model
@@ -93,8 +92,7 @@ def build_kiwi_conditions(
                 mode="bilinear",
                 align_corners=False,
             ).permute(1, 0, 2, 3).contiguous()
-        with control_video_encoding(source.shape[1] > 1):
-            source_latents = vae.encode([source], tile_size=vae_tile_size)[0].unsqueeze(0).to(device=device, dtype=dtype)
+        source_latents = vae.encode([source], tile_size=vae_tile_size)[0].unsqueeze(0).to(device=device, dtype=dtype)
         source_embedder = None
         try:
             source_embedder = _load_embedder(

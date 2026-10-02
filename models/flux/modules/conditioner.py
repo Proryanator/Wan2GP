@@ -1,4 +1,3 @@
-from shared.utils.phase_progress import text_encoding_progress
 from torch import Tensor, nn
 from transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel, T5Tokenizer
 import os
@@ -34,10 +33,9 @@ class HFEmbedder(nn.Module):
             return_tensors="pt",
         )
 
-        with text_encoding_progress(self.hf_module.text_model.encoder.layers if self.is_clip else self.hf_module.encoder.block, prompt_count=len(text)):
-            outputs = self.hf_module(
-                input_ids=batch_encoding["input_ids"].to(self.hf_module.device),
-                attention_mask=None,
-                output_hidden_states=False,
-            )
+        outputs = self.hf_module(
+            input_ids=batch_encoding["input_ids"].to(self.hf_module.device),
+            attention_mask=None,
+            output_hidden_states=False,
+        )
         return outputs[self.output_key].bfloat16()
