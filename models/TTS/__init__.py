@@ -6,4 +6,5 @@ from . import (
     kugelaudio_handler,
     omnivoice_handler,
     qwen3_handler,
+    yue_handler,
 )

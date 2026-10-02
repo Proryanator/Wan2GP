@@ -37,6 +37,5 @@
     "mode": "",
     "activated_loras": [],
     "settings_version": 2.55,
-    "model_type": "flux2_klein_9b",
-    "prompt_enhancer": "TI"
+    "model_type": "flux2_klein_9b"
 }

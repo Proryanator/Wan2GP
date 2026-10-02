@@ -69,10 +69,6 @@ class LTXModelConfigurator(ModelConfigurator[LTXModel]):
             caption_projection=caption_projection,
             audio_caption_projection=audio_caption_projection,
             cross_attention_adaln=config.get("cross_attention_adaln", False),
-            use_prompt_adaln_single=config.get("use_prompt_adaln_single", True),
-            ff_bias=config.get("ff_bias", True),
-            audio_ff_bias=config.get("audio_ff_bias", True),
-            use_keyframes_abs_pos_embedding=config.get("use_keyframes_abs_pos_embedding", False),
         )
 
 
@@ -123,9 +119,6 @@ class LTXVideoOnlyModelConfigurator(ModelConfigurator[LTXModel]):
             apply_gated_attention=config.get("apply_gated_attention", False),
             caption_projection=caption_projection,
             cross_attention_adaln=config.get("cross_attention_adaln", False),
-            use_prompt_adaln_single=config.get("use_prompt_adaln_single", True),
-            ff_bias=config.get("ff_bias", True),
-            use_keyframes_abs_pos_embedding=config.get("use_keyframes_abs_pos_embedding", False),
         )
 
 

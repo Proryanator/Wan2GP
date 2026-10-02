@@ -1,4 +1,3 @@
-from shared.utils.media_control import inference_checkpoint
 #!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 # Copyright 2020 Ross Wightman
@@ -243,7 +242,6 @@ class VisionTransformer(nn.Module):
 
         # Encoding using transformer layers
         for i, blk in enumerate(self.blocks):
-            inference_checkpoint()
             x = blk(x,
                     seq_len=npatch,
                     num_frames=self.temporal_resolution,

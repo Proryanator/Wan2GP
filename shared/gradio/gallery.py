@@ -239,29 +239,17 @@ class AdvancedMediaGallery:
         items_filtered = list(value or [])
         st = get_state(state)
         new_items = self._paths_from_payload(items_filtered)
-        single = bool(st.get("single", False))
-        if single:
-            # The Gallery's own Drop Media input can accept several files even
-            # when the separate Set button is configured for a single file.
-            new_items = new_items[-1:]
         st["items"] = new_items
-        new_sel = len(new_items) - 1 if new_items else None
+        new_sel = len(new_items) - 1
         st["selected"] = new_sel
         record_last_action(st,"add")
-        gallery_update = gr.update(value=new_items, selected_index=new_sel) if single else gr.update(selected_index=new_sel)
-        return gallery_update, st
+        return gr.update(selected_index=new_sel), st
 
     def _on_gallery_change(self, value: List[Any], state: Dict[str, Any]) :
         # Fires when users add/drag/drop/delete via the Gallery itself.
         # items_filtered = self._filter_items_by_mode(list(value or []))
         items_filtered = list(value or [])
         st = get_state(state)
-        if st.get("single", False):
-            items_filtered = items_filtered[-1:]
-            st["items"] = items_filtered
-            st["selected"] = 0 if items_filtered else None
-            st["last_action"] = "gallery_change"
-            return gr.update(value=items_filtered, selected_index=st["selected"]), st
         st["items"] = items_filtered
         # Keep selection if still valid, else default to last
         old_sel = st.get("selected", None)
@@ -357,10 +345,10 @@ class AdvancedMediaGallery:
     def _on_move(self, delta: int, state: Dict[str, Any], gallery) :
         st = get_state(state); items: List[Any] = get_list(gallery); sel = st.get("selected", None)
         if sel is None or not (0 <= sel < len(items)):
-            return gr.skip(), gr.skip()
+            return gr.update(value=items, selected_index=sel), st
         j = sel + delta
         if j < 0 or j >= len(items):
-            return gr.skip(), gr.skip()
+            return gr.update(value=items, selected_index=sel), st
         items[sel], items[j] = items[j], items[sel]
         st["items"] = items; st["selected"] = j
         record_last_action(st,"move")
@@ -406,7 +394,7 @@ class AdvancedMediaGallery:
         with gr.Column(elem_id=self.elem_id, elem_classes=self.elem_classes) as col:
             self.container = col
 
-            self.state = dict(self._initial_state) if update else gr.State(dict(self._initial_state))
+            self.state = gr.State(dict(self._initial_state))
 
             if update:
                 self.gallery = gr.update(
@@ -439,7 +427,7 @@ class AdvancedMediaGallery:
                     size="sm",
                     min_width=1,
                 )
-                self.btn_remove = gr.Button(" Remove ", size="sm", min_width=1, elem_classes=["amg-remove-button"])
+                self.btn_remove = gr.Button(" Remove ", size="sm", min_width=1)
                 self.btn_left   = gr.Button("◀ Left",  size="sm", visible=not self._initial_state["single"], min_width=1)
                 self.btn_right  = gr.Button("Right ▶", size="sm", visible=not self._initial_state["single"], min_width=1)
                 self.btn_clear  = gr.Button(" Clear ",   variant="secondary", size="sm", visible=not self._initial_state["single"], min_width=1)
@@ -453,7 +441,6 @@ class AdvancedMediaGallery:
             inputs=[self.state, self.gallery],
             outputs=[self.gallery, self.state],
             trigger_mode="always_last",
-            show_progress="hidden",
         )
 
         # Gallery value changed by user actions (click-to-add, drag-drop, internal remove, etc.)

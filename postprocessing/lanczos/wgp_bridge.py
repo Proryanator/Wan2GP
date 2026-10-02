@@ -53,9 +53,7 @@ class LanczosUpsampler(SimpleScaleSuffixMixin):
             "methods": [("Lanczos", "lanczos")],
             "vae_methods": [],
             "multipliers": {"lanczos": self.MULTIPLIERS},
-            "default_spatial_upsampling": "lanczos*2",
-            "postprocessing_category": "upsampler",
-            "description": "A very fast CPU resize with negligible VRAM use. It is sharper than a basic resize, but cannot reconstruct lost detail and may add ringing or aliasing.",
+            "default_spatial_upsampling": "lanczos2",
         }
 
     def validate_upsampling(self, spatial_upsampling, image_mode: int) -> str:
