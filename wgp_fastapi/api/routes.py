@@ -560,11 +560,11 @@ async def get_version():
 async def server_status():
     """Get the current server status, including whether the server is
     downloading models, loading models, or idle/generating."""
-    from shared.utils.download import download_in_progress as shared_download_in_progress
+    from shared.utils.download_progress import _current_download
     global _download_in_progress, _model_loading, _model_load_message
 
     # Check if models are being downloaded (either via magic_mask or via download_models/download_file)
-    any_download = _download_in_progress or shared_download_in_progress
+    any_download = _download_in_progress or _current_download.get() is not None
 
     # Determine the overall server status
     if any_download:
