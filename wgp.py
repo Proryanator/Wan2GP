@@ -3425,6 +3425,7 @@ default_profile_image = force_profile_no if force_profile_no >= 0 else server_co
 default_profile_audio = force_profile_no if force_profile_no >= 0 else server_config["audio_profile"]
 default_profile = default_profile_video
 loaded_profile = force_profile_no = -1
+loaded_low_quality = False
 compile = server_config.get("compile", "")
 if args.compile:
     compile="transformer"
@@ -4071,9 +4072,25 @@ def ensure_prompt_enhancer_loaded(override_profile=-1, progress=None, send_cmd=N
         raise gr.Error("Prompt enhancer text runtime is not available.")
     return prompt_enhancer_llm_model, prompt_enhancer_llm_tokenizer
 
+_GGUF_LOW_QUALITY_URLS = {
+    "i2v_2_2_Enhanced_Lightning_v2": {
+        "high": "https://huggingface.co/Abiray/Wan2.2-LightX2V-260412-4STEP-GGUF/resolve/main/high_noise_260412/wan2.2_i2v_A14b_high_noise_lightx2v_4step_720p_260412-Q4_K_M.gguf",
+        "low": "https://huggingface.co/Abiray/Wan2.2-LightX2V-260412-4STEP-GGUF/resolve/main/low_noise_260412/wan2.2_i2v_A14b_low_noise_lightx2v_4step_720p_260412-Q4_K_M.gguf",
+    },
+    "krea2_turbo": {
+        "high": "https://huggingface.co/Abiray/Krea-2-Turbo-GGUF/resolve/main/Krea-2-Turbo-Q4_K_M.gguf",
+    },
+    "qwen_image_edit_plus2_20B": {
+        "high": "https://huggingface.co/unsloth/Qwen-Image-Edit-2511-GGUF/resolve/main/qwen-image-edit-2511-Q3_K_M.gguf",
+    },
+    "minimax_h3_fl2va_pruned": {
+        "high": "https://huggingface.co/molbal/MiniMax-H3-GGUF/resolve/main/minimax_h3_fl2va_pruned_fp8_Q4_0.gguf",
+    },
+}
+
 @controlled_model_loading
 def load_models(model_type, override_profile = -1, output_type="video", config_id = None, runtime_model_type=None, track_as_main=True, gen=None, loading_callback=None, **model_kwargs):
-    global transformer_type, loaded_profile, loaded_config
+    global transformer_type, loaded_profile, loaded_config, loaded_low_quality
     ram_debug_mark(f"loading {model_type}")
     def _load_models_info(message):
         if int(verbose_level) > 0:
@@ -4097,6 +4114,16 @@ def load_models(model_type, override_profile = -1, output_type="video", config_i
         model_filename2 = get_model_filename(model_type=model_type, quantization= "" if save_quantized else transformer_quantization, dtype_policy = transformer_dtype_policy, submodel_no=2, model_def=model_def) # !!!!
     else:
         model_filename2 = None
+
+    # GGUF low-quality override: swap the standard checkpoint for a Q4 GGUF
+    # when low_quality is requested and a GGUF mapping exists for this model type.
+    low_quality = model_kwargs.pop("low_quality", False)
+    if low_quality and model_type in _GGUF_LOW_QUALITY_URLS:
+        gguf_urls = _GGUF_LOW_QUALITY_URLS[model_type]
+        model_filename = gguf_urls["high"]
+        if model_filename2 is not None:
+            model_filename2 = gguf_urls["low"]
+        _load_models_info(f"[low_quality] Using GGUF Q4 models for lower VRAM usage")
     modules = get_model_recursive_prop(model_type, "modules", return_list=True, model_def=model_def)
     modules = [get_model_recursive_prop(module, "modules", sub_prop_name  ="_list",  return_list= True) if isinstance(module, str) else module for module in modules ]
     if save_quantized and "quanto" in model_filename:
@@ -4237,6 +4264,7 @@ def load_models(model_type, override_profile = -1, output_type="video", config_i
     if track_as_main:
         transformer_type = model_type
         loaded_profile = profile
+        loaded_low_quality = low_quality and model_type in _GGUF_LOW_QUALITY_URLS
         loaded_config = config_id or ""
     return wan_model, offloadobj 
 
@@ -7100,6 +7128,14 @@ def generate_media(
         while wan_model == None:
             time.sleep(1)
     model_kwargs = {}
+    # Pass low_quality through to load_models for the GGUF override.
+    current_low_quality = task.get("params", {}).get("low_quality", False)
+    if current_low_quality:
+        model_kwargs["low_quality"] = True
+    # The GGUF override swaps the file but not model_type — trigger a reload
+    # when the low_quality flag differs from what was last loaded.
+    if current_low_quality != loaded_low_quality:
+        reload_needed = True
     new_model_vae_upsampling = upsampler_api.model_load_vae_upsampling_value(spatial_upsampling, base_model_type, model_def, image_mode)
     old_model_vae_upsampling = None if reload_needed or wan_model is None else upsampler_api.loaded_model_vae_upsampling_value(wan_model)
     reload_needed = reload_needed or old_model_vae_upsampling != new_model_vae_upsampling

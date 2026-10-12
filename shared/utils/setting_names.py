@@ -19,6 +19,7 @@ NON_SETTING_KEYS = frozenset({
     "profile_priority", "help", "creation_date", "creation_timestamp", "generation_time", "is_image", "window_no", "custom_guide_used", "_settings_bundle_task_count",
     "image_quality", "video_quality", "hdr", "hdr_video_crf", "modules", "transformer_loras_filenames", "transformer_loras_multipliers",
     "gallery_media_ids", "deepy_media_id", "deepy_media_fingerprint", "deepy_session_id",
+    "low_quality",
 })
 
 DEPRECATED_SETTING_KEYS = frozenset({
