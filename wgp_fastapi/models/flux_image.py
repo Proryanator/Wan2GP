@@ -153,9 +153,9 @@ class FluxImageRequest(BaseModel):
             "activated_loras": loras_list
         }
 
-        # apply guidance scale fix for qwen edit models
-        # Qwen 2.1 keeps WanGP's default guidance of 4 (CFG + negative prompt are useful there)
-        if self.model.is_image_edit and not self.model.is_qwen21:
+        # apply guidance scale fix for qwen edit models: WanGP's factory guidance is 4 for
+        # Qwen 2.1, and CFG at 4x over a handful of steps blows the latents out (black image).
+        if self.model.is_image_edit:
             settings["guidance_scale"] = 1
 
         # Set LoRA multipliers: improved_klein at 1.0, consistency V2 at 0.5

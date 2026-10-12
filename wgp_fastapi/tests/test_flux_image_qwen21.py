@@ -16,7 +16,7 @@ def test_qwen21_keeps_base_guidance_and_prompt_type():
     ).to_wgp_settings()
     assert s["model_type"] == "qwen_image_21_7B"
     assert s["image_prompt_type"] == "KI"
-    assert "guidance_scale" not in s          # WanGP default of 4 must survive
+    assert s["guidance_scale"] == 1           # CFG off: 4x blows the latents out (black image)
     assert s["activated_loras"] == []         # no LoRA on the base path
 
 
