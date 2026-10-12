@@ -284,8 +284,11 @@ def _process_queue_worker():
                 print(
                     f"[QUEUE WORKER] Submitting task {task_id} with settings: {settings}"
                 )
-                # Submit and store job reference for status polling
-                job = session.submit_task(settings)
+                # Submit and store job reference for status polling.
+                # Strip FastAPI-internal bookkeeping keys: the shared API validates
+                # setting names and rejects non-catalog keys.
+                submit_settings = {k: v for k, v in settings.items() if k not in ("id", "_endpoint", "_allow_oom_retry")}
+                job = session.submit_task(submit_settings)
                 print(f"[QUEUE WORKER] Got job: {job}, job.done: {job.done}")
                 task["job"] = job
 
