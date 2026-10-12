@@ -51,3 +51,25 @@ def test_other_edit_models_are_unchanged():
     assert s["model_type"] == "qwen_image_edit_plus2_20B"
     assert s["num_inference_steps"] == 4
     assert "Lightning-4steps" in s["activated_loras"][0]
+
+
+def test_caller_supplied_loras_reach_the_task():
+    s = FluxImageRequest(
+        prompt="anime style", seed=1, num_inference_steps=6, width=768, height=1024,
+        model=FluxImageModel.QWEN_IMAGE_21,
+        activated_loras="a.safetensors,https://x.co/b.safetensors",
+    ).to_wgp_settings()
+    assert s["activated_loras"] == ["a.safetensors", "https://x.co/b.safetensors"]
+    assert s["loras_multipliers"] == "1"
+
+
+def test_flux_klein_defaults_keep_their_multipliers():
+    s = FluxImageRequest(
+        prompt="a cat", seed=1, num_inference_steps=4, width=1024, height=1024,
+        model=FluxImageModel.FLUX_2_KLEIN,
+    ).to_wgp_settings()
+    assert s["activated_loras"] == [
+        "improved_klein.safetensors",
+        "Flux2-Klein-9B-consistency-V2.safetensors",
+    ]
+    assert s["loras_multipliers"] == ["1.0", "0.5"]

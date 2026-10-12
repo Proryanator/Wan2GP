@@ -125,8 +125,15 @@ class FluxImageRequest(BaseModel):
                 "improved_klein.safetensors",
                 "Flux2-Klein-9B-consistency-V2.safetensors",
             ]
+            multipliers = ["1.0", "0.5"]
         else:
             loras_list = []
+            multipliers = "1"
+
+        # caller-supplied LoRAs replace the defaults (they used to be dropped here)
+        if self.activated_loras:
+            loras_list = [p.strip() for p in self.activated_loras.split(",") if p.strip()]
+            multipliers = "1"
 
 
         # flux uses "I" for image inputs
@@ -160,7 +167,7 @@ class FluxImageRequest(BaseModel):
 
         # Set LoRA multipliers: improved_klein at 1.0, consistency V2 at 0.5
         if loras_list:
-            settings["loras_multipliers"] = ["1.0", "0.5"]
+            settings["loras_multipliers"] = multipliers
 
         # Handle mask inpainting
         if self.mask_path:
