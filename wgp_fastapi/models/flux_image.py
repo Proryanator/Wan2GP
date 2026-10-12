@@ -18,9 +18,14 @@ FLUX_IMAGE_MODEL_TYPE_MAP = {
     "pi_flux2": "pi_flux2",
     "image_edit_plus_2509_nunchaku_fp4": "qwen_image_edit_plus_20B_nunchaku_r128_fp4",
     "image_edit_plus_2511": "qwen_image_edit_plus2_20B",
+    "qwen_image_21": "qwen_image_21_7B",
 }
 
-IMAGE_EDIT_MODELS = {"image_edit_plus_2509_nunchaku_fp4", "image_edit_plus_2511"}
+IMAGE_EDIT_MODELS = {"image_edit_plus_2509_nunchaku_fp4", "image_edit_plus_2511", "qwen_image_21"}
+# Qwen Image 2.1 7B is a different family from the 20B Qwen Image Edit models:
+# the base model wants guidance 4 / 40 steps, and it has no GGUF build, so the
+# low_quality path swaps in the Viggle Turbo LoRA instead of a quantized checkpoint.
+QWEN21_MODELS = {"qwen_image_21"}
 
 class FluxImageModel(str, Enum):
     """Supported models for flux-image generation."""
@@ -31,6 +36,7 @@ class FluxImageModel(str, Enum):
     PI_FLUX2 = "pi_flux2"
     IMAGE_EDIT_PLUS_2509_NUNCHAKU_FP4 = "image_edit_plus_2509_nunchaku_fp4"
     IMAGE_EDIT_PLUS_2511 = "image_edit_plus_2511"
+    QWEN_IMAGE_21 = "qwen_image_21"
 
     @property
     def model_type(self) -> str:
@@ -41,6 +47,11 @@ class FluxImageModel(str, Enum):
     def is_image_edit(self) -> bool:
         """Whether this model is an image edit model (vs flux generation)."""
         return self.value in IMAGE_EDIT_MODELS
+
+    @property
+    def is_qwen21(self) -> bool:
+        """Whether this is Qwen Image 2.1 7B (its settings differ from the 20B edit models)."""
+        return self.value in QWEN21_MODELS
 
 
 class FluxImageTaskResponse(BaseModel):
@@ -76,7 +87,7 @@ class FluxImageRequest(BaseModel):
     )
     model: FluxImageModel = Field(
         default=FluxImageModel.FLUX_2_KLEIN,
-        description="Model to use: flux_2_klein (distilled, default), flux_2_klein_base_9b (non-distilled), flux_2_klein_4b, pi_flux2",
+        description="Model to use: flux_2_klein (distilled, default), flux_2_klein_base_9b (non-distilled), flux_2_klein_4b, pi_flux2, image_edit_plus_2511, qwen_image_21",
     )
 
     # Image prompt type
@@ -143,7 +154,8 @@ class FluxImageRequest(BaseModel):
         }
 
         # apply guidance scale fix for qwen edit models
-        if self.model.is_image_edit:
+        # Qwen 2.1 keeps WanGP's default guidance of 4 (CFG + negative prompt are useful there)
+        if self.model.is_image_edit and not self.model.is_qwen21:
             settings["guidance_scale"] = 1
 
         # Set LoRA multipliers: improved_klein at 1.0, consistency V2 at 0.5
@@ -213,7 +225,17 @@ class FluxImageRequest(BaseModel):
         # and force the Lightning 4-step LoRA with matching params.
         if self.low_quality:
             settings["low_quality"] = True
-            if self.model.is_image_edit:
+            if self.model.is_qwen21:
+                # No GGUF build for Qwen 2.1: accelerate with the Viggle Turbo LoRA
+                # (matches profiles/qwen21/Viggle Turbo v0.2.1 6 Steps.json)
+                settings["activated_loras"] = [
+                    "https://huggingface.co/DeepBeepMeep/Qwen_image_2/resolve/main/loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors"
+                ]
+                settings["loras_multipliers"] = "1"
+                settings["num_inference_steps"] = 6
+                settings["sample_solver"] = "viggle_v02"
+                settings["guidance_scale"] = 1
+            elif self.model.is_image_edit:
                 settings["model_type"] = "qwen_image_edit_plus2_20B"
                 settings["activated_loras"] = [
                     "https://huggingface.co/DeepBeepMeep/Qwen_image/resolve/main/loras_accelerators/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
