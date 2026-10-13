@@ -604,6 +604,50 @@ async def upscale(scale: int, image: UploadFile = File(None)):
 
 
 @app.post(
+    "/api/v1/dlss",
+    summary="DLSS Upscaling",
+    description="Upscale a video or image with NVIDIA DLSS. spatial takes a DLSS 5 Neural Rendering value (e.g. dlss5*1, dlss5*2, dlss5*3) that refines and enlarges; temporal takes a DLSS Frame Generation value (e.g. dlssg*2) that interpolates frames. Returns task_id immediately - poll /api/v1/tasks/{task_id} for status.",
+)
+async def dlss(
+    video: UploadFile = File(None),
+    image: UploadFile = File(None),
+    spatial: str = Form("dlss5*2"),
+    temporal: str = Form(""),
+    intensity: float = Form(1.0),
+):
+    try:
+        if video is not None:
+            source_path = _save_upload_file(video, suffix=".mp4")
+        elif image is not None:
+            source_path = _save_upload_file(image, suffix=".png")
+        else:
+            raise HTTPException(status_code=400, detail="Upload a video or an image file")
+        if not spatial and not temporal:
+            raise HTTPException(status_code=400, detail="Provide spatial (e.g. dlss5*2) and/or temporal (e.g. dlssg*2)")
+
+        from shared.api import build_media_postprocessing_settings
+
+        # ponytail: intensity only applies to DLSS 5 Neural Rendering; other spatial upsamplers don't take the kwarg
+        overrides = {}
+        if spatial.startswith("dlss5"):
+            overrides["spatial_upsampler_parameters"] = {"intensity": intensity}
+        settings = build_media_postprocessing_settings(
+            source_path,
+            spatial_upsampling=spatial,
+            temporal_upsampling=temporal,
+            **overrides,
+        )
+
+        task_id = _queue_task(settings, endpoint="dlss")
+        return JSONResponse(content={"task_id": task_id})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
     "/api/v1/i2v",
     summary="Image to Video Generation",
     description="Generate videos from input images and text prompts. Only LTX 2 Video is supported. Returns task_id immediately - poll /api/v1/tasks/{task_id} for status.",
