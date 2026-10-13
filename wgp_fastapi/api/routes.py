@@ -1004,10 +1004,12 @@ async def krea_image(
     inpaint_reference: UploadFile = File(None),
     inpaint_preset: Optional[InpaintPreset] = Form(default=None),
     low_quality: bool = Form(False),
+    real_vae: bool = Form(False),
 ) -> KreaImageResponse:
     """Queue a KREA text-to-image generation task."""
     # When low-res mode is active, redirect to flux-image with klein 4b (lighter model)
     if W2GP_LOW_RES:
+        # ponytail: real_vae not forwarded — flux/klein has no Krea VAE variant
         return await flux_image(
             prompt=prompt,
             seed=seed,
@@ -1050,6 +1052,7 @@ async def krea_image(
             inpaint_reference_path=inpaint_ref_path,
             inpaint_preset=inpaint_preset,
             low_quality=low_quality,
+            real_vae=real_vae,
         )
 
         # Convert to WanGP settings
@@ -1076,6 +1079,7 @@ async def krea_image(
                 inpaint_reference_path=inpaint_ref_path,
                 inpaint_preset=inpaint_preset,
                 low_quality=low_quality,
+                real_vae=real_vae,
             ).to_wgp_settings(), endpoint="krea-image")
 
         # Return task_id immediately

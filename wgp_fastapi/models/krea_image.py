@@ -100,6 +100,10 @@ class KreaImageRequest(BaseModel):
         default=False,
         description="Use GGUF Q4 quantized model for lower VRAM usage. Only applies to krea2_turbo.",
     )
+    real_vae: Optional[bool] = Field(
+        default=False,
+        description="Swap the default Qwen Image VAE for the Krea 2 Real one.",
+    )
 
     def to_wgp_settings(self) -> dict:
         """Convert to WanGP task settings dict."""
@@ -148,6 +152,10 @@ class KreaImageRequest(BaseModel):
         # Pass low_quality flag through for GGUF model override
         if self.low_quality:
             settings["low_quality"] = True
+
+        # "config" is the system_configs selection (index 0) -> krea2_handler's vae_configs()
+        if self.real_vae:
+            settings["config"] = "real"
 
         return settings
 
