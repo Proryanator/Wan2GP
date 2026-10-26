@@ -606,7 +606,7 @@ async def upscale(scale: int, image: UploadFile = File(None)):
 @app.post(
     "/api/v1/i2v",
     summary="Image to Video Generation",
-    description="Generate videos from input images and text prompts. Only LTX 2 Video is supported. Returns task_id immediately - poll /api/v1/tasks/{task_id} for status.",
+    description="Generate videos from input images and text prompts. Supports LTX 2 (22B/25) distilled, Wan 2.2 I2V, Hunyuan 1.5, and MiniMax H3 models. Returns task_id immediately - poll /api/v1/tasks/{task_id} for status.",
 )
 async def image_to_video(
     prompt: str,

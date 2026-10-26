@@ -9,6 +9,9 @@ I2V_MODEL_TYPE_MAP = {
     "wan2_2_i2v_14b_enhanced_lightning_v2": "i2v_2_2_Enhanced_Lightning_v2",
     "minimax_h3_fl2va": "minimax_h3_fl2va",
     "minimax_h3_fl2va_pruned": "minimax_h3_fl2va_pruned",
+    "ltx2_22B_distilled": "ltx2_22B_distilled",
+    "ltx2_22B_distilled_1_1": "ltx2_22B_distilled_1_1",
+    "ltx2_25_22B_distilled": "ltx2_25_22B_distilled",
 }
 
 
@@ -18,6 +21,9 @@ class I2VVideoModel(str, Enum):
     WAN2_2_I2V_14B_ENHANCED_LIGHTNING_V2 = "wan2_2_i2v_14b_enhanced_lightning_v2"
     MINIMAX_H3_FL2VA = "minimax_h3_fl2va"
     MINIMAX_H3_FL2VA_PRUNED = "minimax_h3_fl2va_pruned"
+    LTX2_22B_DISTILLED = "ltx2_22B_distilled"
+    LTX2_22B_DISTILLED_1_1 = "ltx2_22B_distilled_1_1"
+    LTX2_25_22B_DISTILLED = "ltx2_25_22B_distilled"
 
     @property
     def model_type(self) -> str:
@@ -79,6 +85,10 @@ class ImageToVideoRequest(BaseModel):
             "force_fps": self.fps,
             "flow_shift": 5
         }
+
+        # Model-specific settings: LTX2 models use video_prompt_type for guided image-to-video
+        if self.model in (I2VVideoModel.LTX2_22B_DISTILLED, I2VVideoModel.LTX2_22B_DISTILLED_1_1, I2VVideoModel.LTX2_25_22B_DISTILLED):
+            settings["video_prompt_type"] = "VGI"
 
         # Model-specific settings: MiniMax H3 FL2VA is applied differently from existing models
         if self.model in (I2VVideoModel.MINIMAX_H3_FL2VA, I2VVideoModel.MINIMAX_H3_FL2VA_PRUNED):
