@@ -15,6 +15,8 @@ class KreaImageModel(str, Enum):
 
     KREA2_TURBO = "krea2_turbo"
     KREA2_RAW = "krea2_raw"
+    KREA2_TURBO_EDIT = "krea2_turbo_edit"
+    KREA2_RAW_EDIT = "krea2_raw_edit"
 
     @property
     def model_type(self) -> str:
@@ -22,9 +24,16 @@ class KreaImageModel(str, Enum):
         return self.value
 
     @property
+    def is_edit(self) -> bool:
+        """Whether this is an edit model (supports reference images)."""
+        return self in (KreaImageModel.KREA2_TURBO_EDIT, KreaImageModel.KREA2_RAW_EDIT)
+
+    @property
     def default_guidance_scale(self) -> float:
         """Default guidance scale for this model variant."""
         if self == KreaImageModel.KREA2_TURBO:
+            return 0.0
+        if self == KreaImageModel.KREA2_TURBO_EDIT:
             return 0.0
         return 3.5
 
@@ -32,6 +41,8 @@ class KreaImageModel(str, Enum):
     def default_num_inference_steps(self) -> int:
         """Default inference steps for this model variant."""
         if self == KreaImageModel.KREA2_TURBO:
+            return 8
+        if self == KreaImageModel.KREA2_TURBO_EDIT:
             return 8
         return 52
 
@@ -84,6 +95,11 @@ class KreaImageRequest(BaseModel):
         default=None,
         description="Guidance scale (defaults to 0 for Turbo, 3.5 for RAW)",
     )
+    # Reference images (edit flow — up to 2 for edit models)
+    image_refs: Optional[list[str]] = Field(
+        default=None,
+        description="Paths to reference images for edit mode. Up to 2 for edit models, 1 for non-edit.",
+    )
     # Inpainting (optional — all three required to trigger inpaint mode)
     mask_path: Optional[str] = Field(
         default=None, description="Path to mask image for inpainting"
@@ -96,6 +112,23 @@ class KreaImageRequest(BaseModel):
         default=None,
         description="LanPaint step preset. If unset with mask+ref, defaults to EASY (2 steps).",
     )
+    # Edit-specific parameters
+    video_prompt_type: Optional[str] = Field(
+        default=None,
+        description="Reference image prompt type: 'KI' (keep first as main scene), 'I' (people/objects), 'VA' (inpaint). Defaults to 'I' for edit models, 'VA' for inpaint.",
+    )
+    remove_background_images_ref: int = Field(
+        default=0,
+        ge=0,
+        le=2,
+        description="Background removal for reference images: 0=none, 1=remove only main subject, 2=remove all backgrounds.",
+    )
+    outpainting_margin: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=16,
+        description="Outpainting margin size in pixels. When set, extends the canvas with the given margin.",
+    )
     low_quality: Optional[bool] = Field(
         default=False,
         description="Use GGUF Q4 quantized model for lower VRAM usage. Only applies to krea2_turbo.",
@@ -107,8 +140,9 @@ class KreaImageRequest(BaseModel):
         # Default LoRA for krea2 models
         loras_list = ["krea2_improved.safetensors"]
 
-        # Determine if inpainting: all three inputs must be present
-        inpainting = self.mask_path and self.inpaint_reference_path and self.inpaint_preset
+        # Determine mode: edit, inpaint, or text-to-image
+        is_edit_model = self.model.is_edit
+        is_inpaint = self.mask_path and self.inpaint_reference_path and self.inpaint_preset
 
         settings = {
             # Core parameters
@@ -118,8 +152,6 @@ class KreaImageRequest(BaseModel):
             "resolution": f"{self.width}x{self.height}",
             "batch_size": self.batch_size,
             "model_type": self.model.model_type,
-            "image_mode": 2 if inpainting else 1,  # 2 = inpaint, 1 = t2i
-            "image_prompt_type": "I",
             # Output - auto-generate uuid filename
             "output_filename": f"{uuid.uuid4()}.png",
             # LoRA settings
@@ -127,15 +159,41 @@ class KreaImageRequest(BaseModel):
             "loras_multipliers": ["1.0"],
         }
 
-        if inpainting:
-            assert self.inpaint_preset is not None  # guarded by `inpainting`
-            settings["image_mask"] = self.mask_path  # str, not list — generate_media expects str
+        # --- Inpaint mode (mask + reference + preset) ---
+        if is_inpaint:
+            assert self.inpaint_preset is not None  # guarded by `is_inpaint`
+            settings["image_mode"] = 2  # inpaint
+            settings["image_mask"] = self.mask_path
             settings["image_guide"] = self.inpaint_reference_path
             settings["video_prompt_type"] = "VA"  # krea2 inpaint prompt type
             settings["model_mode"] = self.inpaint_preset.value
-            # LanPaint requires full denoise/mask strength
             settings["denoising_strength"] = 1.0
             settings["masking_strength"] = 1.0
+            settings["image_refs"] = []
+
+        # --- Edit mode ---
+        elif is_edit_model:
+            settings["image_mode"] = 1  # edit
+            settings["video_prompt_type"] = self.video_prompt_type or "KI"
+            settings["remove_background_images_ref"] = self.remove_background_images_ref
+
+            # Reference images: up to 2
+            refs = self.image_refs or []
+            if len(refs) > 2:
+                refs = refs[:2]
+            settings["image_refs"] = refs
+
+            # Outpainting
+            if self.outpainting_margin is not None:
+                settings["outpainting_margin"] = self.outpainting_margin
+
+        # --- Text-to-image mode (non-edit) ---
+        else:
+            settings["image_mode"] = 1  # t2i
+            settings["video_prompt_type"] = "I"
+            settings["image_refs"] = []
+
+            # Inpaint without preset is not supported — skip mask fields
 
         # Apply model-appropriate guidance scale
         gs = (

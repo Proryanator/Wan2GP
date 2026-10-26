@@ -1106,6 +1106,153 @@ async def krea_image(
 
 
 @app.post(
+    "/api/v1/krea-edit",
+    response_model=KreaImageResponse,
+    summary="KREA Identity Edit Generation",
+    description="Edit images using KREA2 Turbo Edit or RAW Edit models with identity preservation. "
+    "Supports up to 2 reference images, background removal, and outpainting. "
+    "Returns task_id immediately — poll /api/v1/tasks/{task_id} for status.",
+)
+async def krea_edit(
+    prompt: str = Form(...),
+    seed: int = Form(...),
+    num_inference_steps: int = Form(...),
+    width: int = Form(...),
+    height: int = Form(...),
+    batch_size: int = Form(...),
+    model: KreaImageModel = Form(default=KreaImageModel.KREA2_TURBO_EDIT),
+    guidance_scale: Optional[float] = Form(default=None),
+    # Reference images (up to 2 for edit models)
+    image_ref_1: UploadFile = File(None),
+    image_ref_2: UploadFile = File(None),
+    # Inpainting (optional — all three required to trigger inpaint mode)
+    mask: UploadFile = File(None),
+    inpaint_reference: UploadFile = File(None),
+    inpaint_preset: Optional[InpaintPreset] = Form(default=None),
+    # Edit-specific parameters
+    video_prompt_type: Optional[str] = Form(default=None),
+    remove_background_images_ref: int = Form(default=0),
+    outpainting_margin: Optional[int] = Form(default=None),
+    low_quality: bool = Form(False),
+) -> KreaImageResponse:
+    """Queue a KREA identity edit generation task."""
+    # When low-res mode is active, redirect to flux-image with klein 4b (lighter model)
+    if W2GP_LOW_RES:
+        return await flux_image(
+            prompt=prompt,
+            seed=seed,
+            num_inference_steps=num_inference_steps,
+            width=width,
+            height=height,
+            batch_size=batch_size,
+            model=FluxImageModel.FLUX_2_KLEIN_4B,
+            image_prompt_type="I",
+            image=None,
+            activated_loras=None,
+            mask=mask,
+            inpaint_reference=inpaint_reference,
+            low_quality=low_quality,
+        )
+
+    # ponytail: low_quality override forces GGUF models for all krea_edit calls
+    if W2GP_LOW_QUALITY:
+        low_quality = True
+    mask_path = None
+    inpaint_ref_path = None
+    image_refs: list[str] = []
+
+    try:
+        # Handle reference image uploads
+        if image_ref_1 is not None:
+            image_refs.append(_save_upload_file(image_ref_1, suffix=".png"))
+        if image_ref_2 is not None:
+            image_refs.append(_save_upload_file(image_ref_2, suffix=".png"))
+
+        # Handle mask and inpaint reference uploads
+        if mask is not None:
+            mask_path = _save_upload_file(mask, suffix=".png")
+        if inpaint_reference is not None:
+            inpaint_ref_path = _save_upload_file(inpaint_reference, suffix=".png")
+
+        # Build request object
+        krea_request = KreaImageRequest(
+            prompt=prompt,
+            seed=seed,
+            num_inference_steps=num_inference_steps,
+            width=width,
+            height=height,
+            batch_size=1,
+            model=model,
+            guidance_scale=guidance_scale,
+            image_refs=image_refs if image_refs else None,
+            mask_path=mask_path,
+            inpaint_reference_path=inpaint_ref_path,
+            inpaint_preset=inpaint_preset,
+            video_prompt_type=video_prompt_type,
+            remove_background_images_ref=remove_background_images_ref,
+            outpainting_margin=outpainting_margin,
+            low_quality=low_quality,
+        )
+
+        # Convert to WanGP settings
+        settings = krea_request.to_wgp_settings()
+
+        # Enable OOM retry for this endpoint
+        settings["_allow_oom_retry"] = True
+
+        # Queue first task
+        task_id = _queue_task(settings, endpoint="krea-edit")
+
+        # Queue additional copies if batch_size > 1
+        for _ in range(1, batch_size - 1):
+            _queue_task(KreaImageRequest(
+                prompt=prompt,
+                seed=seed,
+                num_inference_steps=num_inference_steps,
+                width=width,
+                height=height,
+                batch_size=1,
+                model=model,
+                guidance_scale=guidance_scale,
+                image_refs=image_refs if image_refs else None,
+                mask_path=mask_path,
+                inpaint_reference_path=inpaint_ref_path,
+                inpaint_preset=inpaint_preset,
+                video_prompt_type=video_prompt_type,
+                remove_background_images_ref=remove_background_images_ref,
+                outpainting_margin=outpainting_margin,
+                low_quality=low_quality,
+            ).to_wgp_settings(), endpoint="krea-edit")
+
+        # Return task_id immediately
+        return JSONResponse(content={"task_id": task_id})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[ERROR] krea-edit endpoint failed: {e}")
+        print(tb)
+        error_detail = {
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": tb,
+            "context": {
+                "prompt": prompt,
+                "model": model,
+                "seed": seed,
+                "num_inference_steps": num_inference_steps,
+                "width": width,
+                "height": height,
+                "batch_size": batch_size,
+                "image_refs_count": len(image_refs),
+            }
+        }
+        raise HTTPException(status_code=500, detail=error_detail)
+
+
+@app.post(
     "/api/v1/magic-mask",
     response_model=MagicMaskResponse,
     summary="Magic Mask Generation",
