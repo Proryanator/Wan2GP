@@ -36,7 +36,7 @@ echo Creating conda environment...
 conda create -y -n wan2gp python=3.11.14
 
 :: Setup Wan2GP itself
-call conda run -n wan2gp --live-stream pip install torch==2.10.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+call conda run -n wan2gp --live-stream pip install torch==2.10.0 torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu130
 call conda run -n wan2gp --live-stream pip install -r requirements.txt
 
 :: Download improved_klein.safetensors if it doesn't exist (Dropbox link - may need manual download)
