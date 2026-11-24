@@ -4479,7 +4479,6 @@ def ensure_prompt_enhancer_loaded(override_profile=-1, progress=None, send_cmd=N
         raise gr.Error("Prompt enhancer text runtime is not available.")
     return prompt_enhancer_llm_model, prompt_enhancer_llm_tokenizer
 
-<<<<<<< HEAD
 def enhance_prompts_in_process(texts, instructions, max_tokens, seed):
     # the prompt enhancer from inside a running process, which owns the GPU (shared.prompt_enhancer.in_process): for a local engine, loaded
     # for the call, the models of the process leave the VRAM first (MMGP brings them back at their next forward)
@@ -4495,9 +4494,8 @@ def enhance_prompts_in_process(texts, instructions, max_tokens, seed):
         if local:
             release_prompt_enhancer()
 
+
 prompt_enhancer_in_process.register(enhance_prompts_in_process, lambda: server_config.get("enhancer_enabled", 0) > 0)
-
-
 _GGUF_LOW_QUALITY_URLS = {
     "i2v_2_2_Enhanced_Lightning_v2": {
         "high": "https://huggingface.co/Abiray/Wan2.2-LightX2V-260412-4STEP-GGUF/resolve/main/high_noise_260412/wan2.2_i2v_A14b_high_noise_lightx2v_4step_720p_260412-Q4_K_M.gguf",
@@ -4513,7 +4511,6 @@ _GGUF_LOW_QUALITY_URLS = {
         "high": "https://huggingface.co/molbal/MiniMax-H3-GGUF/resolve/main/minimax_h3_fl2va_pruned_fp8_Q4_0.gguf",
     },
 }
-
 
 @controlled_model_loading
 def load_models(model_type, override_profile = -1, output_type="video", config_id = None, runtime_model_type=None, track_as_main=True, gen=None, loading_callback=None, overrides={}, extension=None, **model_kwargs):
